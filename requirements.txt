@@ -9,3 +9,4 @@ opencv-python==4.8.1.78
 numpy==1.24.3
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.23.0
+ImageHash==4.3.1

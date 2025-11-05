@@ -2,6 +2,21 @@
 
 > **Your Digital Accountant Assistant** - Transform messy invoice documents into organized, categorized, and easily searchable records.
 
+## 🎉 Enhanced Edition - Now with Advanced Features!
+
+This system now includes **8 powerful enhancements**:
+
+1. 🧠 **Machine Learning** - Learns from your corrections for better accuracy
+2. 💱 **Multi-Currency Support** - Process invoices in 10+ currencies
+3. 🔍 **Duplicate Detection** - Prevents processing the same invoice twice
+4. 💰 **Budget Tracking** - Set budgets and receive alerts
+5. 📊 **Tax Reporting** - IRS-compliant Schedule C reports
+6. 📧 **Email Auto-Processing** - Forward invoices via email
+7. 🌍 **Multi-Language OCR** - Support for 18+ languages
+8. 📱 **Mobile Scanner** - Scan receipts with your phone camera
+
+**➡️ See [ENHANCEMENTS.md](ENHANCEMENTS.md) for complete documentation**
+
 ## Overview
 
 The Invoice & Receipt Processor is a comprehensive web application that automates the tedious task of managing financial documents. Upload invoices and receipts, and watch as the system extracts key information, intelligently categorizes expenses, organizes files, and generates insightful reports.
