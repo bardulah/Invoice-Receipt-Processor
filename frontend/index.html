@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice & Receipt Processor - Your Digital Accountant Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">
+                    <span class="logo-icon">📊</span>
+                    Invoice Processor
+                </h1>
+                <nav class="nav">
+                    <button class="nav-btn active" data-view="upload">Upload</button>
+                    <button class="nav-btn" data-view="expenses">Expenses</button>
+                    <button class="nav-btn" data-view="reports">Reports</button>
+                    <button class="nav-btn" data-view="dashboard">Dashboard</button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Upload View -->
+            <div id="upload-view" class="view active">
+                <div class="upload-section">
+                    <h2>Upload Your Documents</h2>
+                    <p class="subtitle">Drop your invoices and receipts here, and let me organize them for you!</p>
+
+                    <!-- Upload Area -->
+                    <div class="upload-area" id="upload-area">
+                        <div class="upload-icon">📄</div>
+                        <h3>Drag & drop files here</h3>
+                        <p>or click to browse</p>
+                        <p class="supported-formats">Supported: PDF, PNG, JPG, JPEG</p>
+                        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.gif,.bmp,.tiff" multiple hidden>
+                        <button class="btn btn-primary" id="browse-btn">Browse Files</button>
+                    </div>
+
+                    <!-- Processing Pipeline -->
+                    <div class="pipeline" id="pipeline" style="display: none;">
+                        <h3>Processing Pipeline</h3>
+                        <div class="pipeline-steps">
+                            <div class="pipeline-step" data-step="upload">
+                                <div class="step-icon">📤</div>
+                                <div class="step-content">
+                                    <h4>Upload</h4>
+                                    <p>Receiving document...</p>
+                                </div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step" data-step="extract">
+                                <div class="step-icon">🔍</div>
+                                <div class="step-content">
+                                    <h4>Extract</h4>
+                                    <p>Reading data...</p>
+                                </div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step" data-step="review">
+                                <div class="step-icon">✏️</div>
+                                <div class="step-content">
+                                    <h4>Review</h4>
+                                    <p>Verify information...</p>
+                                </div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step" data-step="categorize">
+                                <div class="step-icon">🏷️</div>
+                                <div class="step-content">
+                                    <h4>Categorize</h4>
+                                    <p>Smart suggestions...</p>
+                                </div>
+                            </div>
+                            <div class="pipeline-arrow">→</div>
+                            <div class="pipeline-step" data-step="complete">
+                                <div class="step-icon">✅</div>
+                                <div class="step-content">
+                                    <h4>Complete</h4>
+                                    <p>Organized & filed!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Extracted Data Form -->
+                    <div class="extraction-form" id="extraction-form" style="display: none;">
+                        <h3>Review Extracted Information</h3>
+                        <p class="form-subtitle">Please verify and adjust the extracted data if needed.</p>
+
+                        <form id="expense-form">
+                            <input type="hidden" id="file-id" name="file-id">
+
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="vendor">Vendor Name *</label>
+                                    <input type="text" id="vendor" name="vendor" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="amount">Amount *</label>
+                                    <div class="input-with-prefix">
+                                        <span class="prefix">$</span>
+                                        <input type="number" id="amount" name="amount" step="0.01" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="date">Date *</label>
+                                    <input type="date" id="date" name="date" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="invoice-number">Invoice/Receipt Number</label>
+                                    <input type="text" id="invoice-number" name="invoice-number">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="category">Category *</label>
+                                <select id="category" name="category" required>
+                                    <option value="">Select a category...</option>
+                                </select>
+                                <div class="category-suggestions" id="category-suggestions"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="description">Description</label>
+                                <textarea id="description" name="description" rows="3"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="notes">Notes (optional)</label>
+                                <textarea id="notes" name="notes" rows="2" placeholder="Add any additional notes..."></textarea>
+                            </div>
+
+                            <div class="confidence-indicator" id="confidence-indicator">
+                                <div class="confidence-label">Extraction Confidence:</div>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" id="confidence-fill"></div>
+                                </div>
+                                <div class="confidence-text" id="confidence-text">0%</div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Process & File Document</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Success Message -->
+                    <div class="success-message" id="success-message" style="display: none;">
+                        <div class="success-icon">🎉</div>
+                        <h3>Document Processed Successfully!</h3>
+                        <p id="success-details"></p>
+                        <button class="btn btn-primary" id="upload-another-btn">Upload Another Document</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expenses View -->
+            <div id="expenses-view" class="view">
+                <div class="expenses-header">
+                    <h2>All Expenses</h2>
+                    <div class="expenses-filters">
+                        <input type="text" id="search-input" placeholder="Search expenses..." class="search-input">
+                        <select id="filter-category" class="filter-select">
+                            <option value="">All Categories</option>
+                        </select>
+                        <select id="filter-vendor" class="filter-select">
+                            <option value="">All Vendors</option>
+                        </select>
+                        <input type="date" id="filter-start-date" class="filter-input">
+                        <input type="date" id="filter-end-date" class="filter-input">
+                        <button class="btn btn-secondary" id="clear-filters-btn">Clear Filters</button>
+                    </div>
+                </div>
+
+                <div class="expenses-list" id="expenses-list">
+                    <div class="loading">Loading expenses...</div>
+                </div>
+            </div>
+
+            <!-- Reports View -->
+            <div id="reports-view" class="view">
+                <h2>Expense Reports</h2>
+                <div class="reports-section">
+                    <div class="report-controls">
+                        <div class="form-group">
+                            <label for="report-type">Report Type</label>
+                            <select id="report-type" class="filter-select">
+                                <option value="summary">Summary Report</option>
+                                <option value="by_category">By Category</option>
+                                <option value="by_vendor">By Vendor</option>
+                                <option value="monthly">Monthly Breakdown</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="report-start-date">Start Date</label>
+                            <input type="date" id="report-start-date" class="filter-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="report-end-date">End Date</label>
+                            <input type="date" id="report-end-date" class="filter-input">
+                        </div>
+                        <div class="report-actions">
+                            <button class="btn btn-primary" id="generate-report-btn">Generate Report</button>
+                            <button class="btn btn-secondary" id="export-csv-btn">Export to CSV</button>
+                        </div>
+                    </div>
+
+                    <div class="report-content" id="report-content">
+                        <div class="empty-state">
+                            <p>Select report options and click "Generate Report" to view your expense report.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="view">
+                <h2>Dashboard</h2>
+                <div class="dashboard-grid" id="dashboard-grid">
+                    <div class="loading">Loading dashboard...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
