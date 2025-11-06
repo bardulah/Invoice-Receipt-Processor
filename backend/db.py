@@ -18,6 +18,7 @@ class Expense(Base):
     __tablename__ = 'expenses'
 
     id = Column(String(50), primary_key=True)
+    user_id = Column(Integer, nullable=True, index=True)  # NULL for legacy expenses
     date = Column(Date, nullable=False, index=True)
     vendor = Column(String(255), nullable=False, index=True)
     amount = Column(Float, nullable=False)
@@ -58,6 +59,7 @@ class Expense(Base):
 
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'date': self.date.strftime('%Y-%m-%d') if self.date else None,
             'vendor': self.vendor,
             'amount': self.amount,
@@ -176,6 +178,7 @@ class DatabaseAdapter:
         # Create expense record
         expense = Expense(
             id=expense_id,
+            user_id=expense_data.get('user_id'),  # Can be None for legacy
             date=date_obj,
             vendor=expense_data.get('vendor', 'Unknown'),
             amount=float(expense_data.get('amount', 0)),
@@ -208,10 +211,14 @@ class DatabaseAdapter:
 
     def get_expenses(self, category: Optional[str] = None, vendor: Optional[str] = None,
                     start_date: Optional[str] = None, end_date: Optional[str] = None,
-                    search: Optional[str] = None) -> List[Dict]:
+                    search: Optional[str] = None, user_id: Optional[int] = None) -> List[Dict]:
         """Get expenses with optional filters"""
         with self.session_scope() as session:
             query = session.query(Expense)
+
+            # Filter by user_id (if provided)
+            if user_id is not None:
+                query = query.filter(Expense.user_id == user_id)
 
             # Filter by category
             if category:

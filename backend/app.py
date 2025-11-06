@@ -1,9 +1,10 @@
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import traceback
 
 # Import original modules
@@ -14,6 +15,9 @@ from report_generator import ReportGenerator
 
 # Import database adapter
 from db import DatabaseAdapter
+
+# Import authentication
+from auth import AuthManager
 
 # Import Celery tasks
 from celery_worker import celery_app, extract_document, process_document
@@ -27,6 +31,12 @@ from tax_reporter import TaxReporter
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
+
+# JWT Configuration
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+jwt = JWTManager(app)
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
@@ -43,6 +53,7 @@ extractor = DocumentExtractor()
 file_manager = FileManager(PROCESSED_FOLDER)
 categorizer = ExpenseCategorizer(DATA_FOLDER)  # Keep for category suggestions
 db = DatabaseAdapter(DATA_FOLDER)  # New: SQLite database
+auth_manager = AuthManager(DATA_FOLDER)  # Authentication manager
 report_generator = ReportGenerator(DATA_FOLDER, db)  # Use db for reports
 
 # Initialize new enhancement components
@@ -208,6 +219,16 @@ def process_document():
         # Organize file into folder structure
         final_path = file_manager.organize_file(filepath, expense_data, new_filename)
 
+        # Get user_id from JWT if available (optional)
+        try:
+            from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+            verify_jwt_in_request(optional=True)
+            user_id = get_jwt_identity()
+            if user_id:
+                expense_data['user_id'] = user_id
+        except:
+            pass  # No JWT token, continue without user_id
+
         # Store expense record in database
         expense_data['file_path'] = final_path
         expense_data['processed_date'] = datetime.now().isoformat()
@@ -233,7 +254,7 @@ def process_document():
 
 @app.route('/api/expenses', methods=['GET'])
 def get_expenses():
-    """Get all expenses with optional filters"""
+    """Get all expenses with optional filters (supports optional JWT)"""
     try:
         category = request.args.get('category')
         vendor = request.args.get('vendor')
@@ -241,12 +262,22 @@ def get_expenses():
         end_date = request.args.get('end_date')
         search = request.args.get('search')
 
+        # Get user_id from JWT if available (optional)
+        user_id = None
+        try:
+            from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+            verify_jwt_in_request(optional=True)
+            user_id = get_jwt_identity()
+        except:
+            pass  # No JWT token, show all expenses
+
         expenses = db.get_expenses(
             category=category,
             vendor=vendor,
             start_date=start_date,
             end_date=end_date,
-            search=search
+            search=search,
+            user_id=user_id  # Filter by user if authenticated
         )
 
         return jsonify({
@@ -332,6 +363,144 @@ def get_statistics():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ===== AUTHENTICATION ENDPOINTS =====
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """Register a new user"""
+    try:
+        data = request.json
+        email = data.get('email')
+        username = data.get('username')
+        password = data.get('password')
+
+        if not email or not username or not password:
+            return jsonify({'error': 'Email, username, and password required'}), 400
+
+        # Validate email format
+        if '@' not in email:
+            return jsonify({'error': 'Invalid email format'}), 400
+
+        # Validate password length
+        if len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+
+        # Register user
+        user = auth_manager.register_user(email, username, password)
+
+        # Create tokens
+        access_token = create_access_token(identity=user['id'])
+        refresh_token = create_refresh_token(identity=user['id'])
+
+        return jsonify({
+            'success': True,
+            'message': 'User registered successfully',
+            'user': user,
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        }), 201
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """Login a user"""
+    try:
+        data = request.json
+        email_or_username = data.get('email') or data.get('username')
+        password = data.get('password')
+
+        if not email_or_username or not password:
+            return jsonify({'error': 'Email/username and password required'}), 400
+
+        # Authenticate user
+        user = auth_manager.authenticate_user(email_or_username, password)
+
+        if not user:
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+        # Create tokens
+        access_token = create_access_token(identity=user['id'])
+        refresh_token = create_refresh_token(identity=user['id'])
+
+        return jsonify({
+            'success': True,
+            'message': 'Login successful',
+            'user': user,
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        })
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/auth/refresh', methods=['POST'])
+@jwt_required(refresh=True)
+def refresh():
+    """Refresh access token"""
+    try:
+        current_user_id = get_jwt_identity()
+        access_token = create_access_token(identity=current_user_id)
+
+        return jsonify({
+            'success': True,
+            'access_token': access_token
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    """Get current user information"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = auth_manager.get_user_by_id(current_user_id)
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'user': user
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/password', methods=['PUT'])
+@jwt_required()
+def update_password():
+    """Update user password"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.json
+        new_password = data.get('new_password')
+
+        if not new_password:
+            return jsonify({'error': 'New password required'}), 400
+
+        if len(new_password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+
+        auth_manager.update_password(current_user_id, new_password)
+
+        return jsonify({
+            'success': True,
+            'message': 'Password updated successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # ===== ASYNC TASK ENDPOINTS =====
 
