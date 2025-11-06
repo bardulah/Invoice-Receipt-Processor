@@ -15,6 +15,9 @@ from report_generator import ReportGenerator
 # Import database adapter
 from db import DatabaseAdapter
 
+# Import Celery tasks
+from celery_worker import celery_app, extract_document, process_document
+
 # Import new enhancement modules
 from ml_extractor import MLExtractor
 from currency_manager import CurrencyManager
@@ -89,13 +92,26 @@ def upload_file():
 
 @app.route('/api/extract/<file_id>', methods=['POST'])
 def extract_data(file_id):
-    """Extract data from uploaded document with ML enhancements"""
+    """Extract data from uploaded document with ML enhancements (supports async)"""
     try:
         filepath = os.path.join(UPLOAD_FOLDER, file_id)
         if not os.path.exists(filepath):
             return jsonify({'error': 'File not found'}), 404
 
-        # Extract data from document (original)
+        # Check if async mode is requested
+        use_async = request.json.get('async', False) if request.is_json else False
+
+        if use_async:
+            # Queue async task
+            task = extract_document.delay(filepath, file_id)
+            return jsonify({
+                'success': True,
+                'task_id': task.id,
+                'status': 'processing',
+                'message': 'Document extraction queued. Use /api/task/<task_id> to check status.'
+            })
+
+        # Synchronous mode (original behavior)
         extracted_data = extractor.extract(filepath)
 
         # Enhance with ML if available
@@ -316,6 +332,79 @@ def get_statistics():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ===== ASYNC TASK ENDPOINTS =====
+
+@app.route('/api/task/<task_id>', methods=['GET'])
+def get_task_status(task_id):
+    """Get the status of an async task"""
+    try:
+        task = celery_app.AsyncResult(task_id)
+
+        if task.state == 'PENDING':
+            response = {
+                'state': task.state,
+                'status': 'Task is waiting to be processed...'
+            }
+        elif task.state == 'PROCESSING':
+            response = {
+                'state': task.state,
+                'status': task.info.get('status', 'Processing...')
+            }
+        elif task.state == 'SUCCESS':
+            response = {
+                'state': task.state,
+                'status': 'Completed',
+                'result': task.result
+            }
+        elif task.state == 'FAILURE':
+            response = {
+                'state': task.state,
+                'status': 'Failed',
+                'error': str(task.info)
+            }
+        else:
+            response = {
+                'state': task.state,
+                'status': str(task.info)
+            }
+
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/process-async', methods=['POST'])
+def process_document_async():
+    """Process document asynchronously"""
+    try:
+        data = request.json
+        file_id = data.get('file_id')
+        expense_data = data.get('expense_data')
+        original_extraction = data.get('original_extraction', {})
+
+        filepath = os.path.join(UPLOAD_FOLDER, file_id)
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+
+        # Queue async task
+        task = process_document.delay(
+            expense_data,
+            filepath,
+            file_id,
+            original_extraction
+        )
+
+        return jsonify({
+            'success': True,
+            'task_id': task.id,
+            'status': 'processing',
+            'message': 'Document processing queued. Use /api/task/<task_id> to check status.'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
 
 # ===== NEW ENHANCEMENT ENDPOINTS =====
 
@@ -717,6 +806,7 @@ if __name__ == '__main__':
     print("Invoice & Receipt Processor - Enhanced Edition")
     print("=" * 60)
     print("✅ SQLite Database - Active")
+    print("✅ Async Processing (Celery) - Active")
     print("✅ Machine Learning - Active")
     print("✅ Multi-Currency Support - Active")
     print("✅ Duplicate Detection - Active")
@@ -724,6 +814,11 @@ if __name__ == '__main__':
     print("✅ Tax Reporting - Active")
     print("=" * 60)
     print("Server starting on http://localhost:5000")
+    print("=" * 60)
+    print("\nNOTE: For async processing, start Celery worker:")
+    print("  celery -A celery_worker worker --loglevel=info")
+    print("\nFor Redis (required for Celery):")
+    print("  redis-server")
     print("=" * 60)
 
     app.run(debug=True, host='0.0.0.0', port=5000)
