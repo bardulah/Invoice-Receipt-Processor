@@ -3,14 +3,18 @@ import csv
 import os
 from datetime import datetime
 from collections import defaultdict
-from categorizer import ExpenseCategorizer
 
 class ReportGenerator:
     """Generate expense reports in various formats"""
 
-    def __init__(self, data_folder):
+    def __init__(self, data_folder, db_adapter=None):
         self.data_folder = data_folder
-        self.categorizer = ExpenseCategorizer(data_folder)
+        # Use db_adapter if provided, otherwise fall back to ExpenseCategorizer
+        if db_adapter:
+            self.categorizer = db_adapter
+        else:
+            from categorizer import ExpenseCategorizer
+            self.categorizer = ExpenseCategorizer(data_folder)
 
     def generate_report(self, report_type, filters=None):
         """Generate report based on type and filters"""

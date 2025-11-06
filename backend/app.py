@@ -12,6 +12,9 @@ from file_manager import FileManager
 from categorizer import ExpenseCategorizer
 from report_generator import ReportGenerator
 
+# Import database adapter
+from db import DatabaseAdapter
+
 # Import new enhancement modules
 from ml_extractor import MLExtractor
 from currency_manager import CurrencyManager
@@ -35,15 +38,16 @@ for folder in [UPLOAD_FOLDER, PROCESSED_FOLDER, DATA_FOLDER]:
 # Initialize original components
 extractor = DocumentExtractor()
 file_manager = FileManager(PROCESSED_FOLDER)
-categorizer = ExpenseCategorizer(DATA_FOLDER)
-report_generator = ReportGenerator(DATA_FOLDER)
+categorizer = ExpenseCategorizer(DATA_FOLDER)  # Keep for category suggestions
+db = DatabaseAdapter(DATA_FOLDER)  # New: SQLite database
+report_generator = ReportGenerator(DATA_FOLDER, db)  # Use db for reports
 
 # Initialize new enhancement components
 ml_extractor = MLExtractor(DATA_FOLDER)
 currency_manager = CurrencyManager(DATA_FOLDER)
-duplicate_detector = DuplicateDetector(categorizer)
-budget_manager = BudgetManager(DATA_FOLDER, categorizer)
-tax_reporter = TaxReporter(DATA_FOLDER, categorizer)
+duplicate_detector = DuplicateDetector(db)  # Use db instead of categorizer
+budget_manager = BudgetManager(DATA_FOLDER, db)  # Use db instead of categorizer
+tax_reporter = TaxReporter(DATA_FOLDER, db)  # Use db instead of categorizer
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -188,10 +192,10 @@ def process_document():
         # Organize file into folder structure
         final_path = file_manager.organize_file(filepath, expense_data, new_filename)
 
-        # Store expense record
+        # Store expense record in database
         expense_data['file_path'] = final_path
         expense_data['processed_date'] = datetime.now().isoformat()
-        expense_id = categorizer.add_expense(expense_data)
+        expense_id = db.add_expense(expense_data)
 
         # Check budgets after adding expense
         budget_check = budget_manager.check_all_budgets()
@@ -221,7 +225,7 @@ def get_expenses():
         end_date = request.args.get('end_date')
         search = request.args.get('search')
 
-        expenses = categorizer.get_expenses(
+        expenses = db.get_expenses(
             category=category,
             vendor=vendor,
             start_date=start_date,
@@ -252,7 +256,7 @@ def get_categories():
 def get_vendors():
     """Get all unique vendors"""
     try:
-        vendors = categorizer.get_all_vendors()
+        vendors = db.get_all_vendors()
         return jsonify({
             'success': True,
             'vendors': vendors
@@ -295,7 +299,7 @@ def export_report():
 def get_statistics():
     """Get dashboard statistics"""
     try:
-        stats = categorizer.get_statistics()
+        stats = db.get_statistics()
 
         # Add ML statistics
         stats['ml_stats'] = ml_extractor.get_statistics()
@@ -421,11 +425,7 @@ def get_similar_expenses(expense_id):
     """Find expenses similar to the given expense"""
     try:
         # Find the expense
-        expense = None
-        for exp in categorizer.expenses:
-            if exp.get('id') == expense_id:
-                expense = exp
-                break
+        expense = db.get_expense_by_id(expense_id)
 
         if not expense:
             return jsonify({'error': 'Expense not found'}), 404
@@ -716,6 +716,7 @@ if __name__ == '__main__':
     print("=" * 60)
     print("Invoice & Receipt Processor - Enhanced Edition")
     print("=" * 60)
+    print("✅ SQLite Database - Active")
     print("✅ Machine Learning - Active")
     print("✅ Multi-Currency Support - Active")
     print("✅ Duplicate Detection - Active")
